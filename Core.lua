@@ -63,21 +63,32 @@ end
 -- Checks every id in every database group against the client's own spell
 -- data and remembers which groups didn't resolve, so the UI can flag them
 -- instead of silently tracking a buff that can never match.
+--
+-- weaponEnchant groups are skipped here: their `ids` are weapon-enchant ids
+-- (what GetWeaponEnchantInfo returns), a completely different id space from
+-- spells - the client's spell API has no way to resolve or verify them, so
+-- treating them as spell ids would just produce a wrong/misleading result.
+-- The only thing worth flagging for those is "nobody ever filled in an id at
+-- all" (see the weapon_enchants comment in Database.lua for known gaps).
 function AYB:ValidateDatabase()
 	self.validation = {}
 	for _, category in ipairs(self.Database.categories) do
 		for _, group in ipairs(category.groups) do
-			local resolved = {}
-			for _, id in ipairs(group.ids) do
-				local name = self:ResolveSpell(id)
-				if name then
-					table.insert(resolved, name)
+			if group.type == "weaponEnchant" then
+				self.validation[group.name] = { ok = #group.ids > 0, resolvedNames = {} }
+			else
+				local resolved = {}
+				for _, id in ipairs(group.ids) do
+					local name = self:ResolveSpell(id)
+					if name then
+						table.insert(resolved, name)
+					end
 				end
+				self.validation[group.name] = {
+					ok = #resolved > 0,
+					resolvedNames = resolved,
+				}
 			end
-			self.validation[group.name] = {
-				ok = #resolved > 0,
-				resolvedNames = resolved,
-			}
 		end
 	end
 end
@@ -168,38 +179,49 @@ function AYB:GetWeaponEnchant(slot)
 	return hasMH, mhEnchantID, mhExpiration
 end
 
+-- Checks a single weapon slot ("main" or "off") against entry.ids, which for
+-- weaponEnchant entries are weapon-enchant ids, NOT spell ids - the two live
+-- in entirely separate id spaces (GetWeaponEnchantInfo's enchantID has no
+-- relationship to any castable spell), so there is no name-based fallback
+-- here the way IsAuraActive has for auras: an id match is the only thing
+-- that can ever confirm a weapon enchant.
+function AYB:CheckWeaponSlot(entry, slot)
+	local has, enchantID, expiration = self:GetWeaponEnchant(slot)
+	if not has then
+		return "missing"
+	end
+	if not enchantID then
+		-- client doesn't expose which enchant id is applied on this build;
+		-- all we know is *something* is on, which might or might not be right.
+		return "unknown", nil, expiration
+	end
+	if entry.ids then
+		for _, id in ipairs(entry.ids) do
+			if id == enchantID then
+				return "active", nil, expiration
+			end
+		end
+	end
+	-- the client told us exactly which enchant is applied and it wasn't one
+	-- of ours - a definite mismatch, which matters just as much as nothing
+	-- being on the weapon at all.
+	return "missing"
+end
+
 function AYB:CheckEntry(entry)
 	if entry.type == "weaponEnchant" then
-		local has, enchantID, expiration = self:GetWeaponEnchant(entry.slot or "main")
-		if not has then
-			return "missing"
-		end
-		if enchantID then
-			-- the client told us exactly which enchant is applied, so this is
-			-- a definite answer either way - a mismatch here means the wrong
-			-- enchant is on the weapon, which matters just as much as none
-			-- being on it at all.
-			if entry.ids then
-				for _, id in ipairs(entry.ids) do
-					if id == enchantID then
-						return "active", nil, expiration
-					end
-				end
+		if entry.slot == "both" then
+			local mainStatus = self:CheckWeaponSlot(entry, "main")
+			local offStatus = self:CheckWeaponSlot(entry, "off")
+			if mainStatus == "active" and offStatus == "active" then
+				return "active"
 			end
-			-- fall back to resolving the enchant id's own name and matching
-			-- that - catches ranks/variants we never explicitly listed
-			local resolvedName = self:ResolveSpell(enchantID)
-			if resolvedName then
-				if NameMatchesAny(resolvedName, self:ResolveMatchPatterns(entry)) then
-					return "active", nil, expiration
-				end
+			if mainStatus == "missing" or offStatus == "missing" then
 				return "missing"
 			end
-			return "unknown", nil, expiration
+			return "unknown"
 		end
-		-- client doesn't expose enchant ids on this build; all we know is
-		-- *something* is applied, which might or might not be the right one.
-		return "unknown", nil, expiration
+		return self:CheckWeaponSlot(entry, entry.slot or "main")
 	end
 
 	local active, icon, expiration = self:IsAuraActive(entry)
@@ -275,17 +297,43 @@ function AYB:SetRequired(name, required)
 	end
 end
 
-function AYB:AddCustom(idText, requiredFlag, isWeaponEnchant, slot)
+-- slot: "main", "off", or "both" (dual-wielders imbuing/oiling both weapons
+-- with the same enchant - see AYB:CheckEntry). Only meaningful for
+-- type == "weaponEnchant" entries.
+function AYB:SetSlot(name, slot)
+	local _, entry = self:IsTracked(name)
+	if entry then
+		entry.slot = slot
+		self:Refresh()
+	end
+end
+
+-- customName is only used (and required) for weapon enchants: their id is a
+-- weapon-enchant id, not a spell id (see Database.lua's file header), so the
+-- client has no way to look up a display name for it the way it can for a
+-- regular spell id.
+function AYB:AddCustom(idText, requiredFlag, isWeaponEnchant, slot, customName)
 	local id = tonumber(idText)
 	if not id then
-		print("|cffff4444AreYouBuffed:|r that doesn't look like a numeric spell ID.")
+		print("|cffff4444AreYouBuffed:|r that doesn't look like a numeric ID.")
 		return false
 	end
-	local name = self:ResolveSpell(id)
-	if not name then
-		print("|cffff4444AreYouBuffed:|r spell ID " .. id .. " isn't recognized by your client - double check it on Wowhead.")
-		return false
+
+	local name
+	if isWeaponEnchant then
+		name = strtrim(customName or "")
+		if name == "" then
+			print("|cffff4444AreYouBuffed:|r weapon enchants need a name too - the client can't look one up from a weapon-enchant id.")
+			return false
+		end
+	else
+		name = self:ResolveSpell(id)
+		if not name then
+			print("|cffff4444AreYouBuffed:|r spell ID " .. id .. " isn't recognized by your client - double check it on Wowhead.")
+			return false
+		end
 	end
+
 	if self:IsTracked(name) then
 		print("|cffffcc00AreYouBuffed:|r " .. name .. " is already tracked.")
 		return false

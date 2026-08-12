@@ -41,9 +41,10 @@ Configure exactly which flasks, elixirs, weapon enchants, and group buffs matter
 - **`/buffed`** — a single command that instantly scans everything you're tracking and shows a green/red checklist on screen for a few seconds.
 - **Ready check integration.** Optionally auto-click "No" on a raid ready check if a *required* buff is missing, and post a chat warning naming exactly what's missing.
 - **Required vs. optional buffs.** Track something just to keep an eye on it without it blocking ready checks.
-- **Add anything by spell ID.** Not in the built-in list? Paste a spell ID from Wowhead and track it directly — works for auras and weapon enchants alike.
+- **Add anything by ID.** Not in the built-in list? Paste a spell ID from Wowhead to track a regular buff, or a weapon-enchant ID (plus a name) to track a weapon enchant.
+- **Track a weapon enchant on either weapon, or both.** Set a weapon-enchant entry to main-hand, off-hand, or both — e.g. Windfury Weapon imbued on two weapons only counts as active once it's confirmed on both.
 - **Class default sets.** One click loads a sensible starting checklist for your class, fully editable afterwards.
-- **Self-validating.** At login, every built-in entry is checked against your own client's spell data. Anything that doesn't resolve is flagged `(unverified)` in the config UI instead of silently failing.
+- **Self-validating.** At login, every built-in *buff* entry is checked against your own client's spell data (weapon enchants use a different id space the client can't verify - see [How detection works](#how-detection-works)). Anything that doesn't resolve is flagged `(unverified)` in the config UI instead of silently failing.
 - **No dependencies.** Plain Blizzard UI widgets only — no Ace3, no external libraries. One folder, four Lua files.
 
 ## Installation
@@ -70,7 +71,7 @@ If the AddOns list flags it as "out of date," tick **Load out of date AddOns** �
 ### The config window (`/ayb`)
 
 - **Browse tab** — pick buffs to track from the built-in database, organized into categories (Flasks, Battle Elixirs, Guardian Elixirs, Food & Drink, Weapon Enchants, Class/Group Buffs, World Buffs) with a search box. Check a box to start tracking it for the current character.
-- **My Buffs tab** — everything you're currently tracking. Uncheck "required" on an entry to keep watching it without it blocking ready checks. Remove entries with the `x` button. Paste a numeric spell ID from Wowhead to track anything not in the built-in list — tick "Weapon enchant" (and "Off-hand" if needed) for temporary weapon buffs. A "Load Class Defaults" button seeds a starting list for your class.
+- **My Buffs tab** — everything you're currently tracking. Uncheck "required" on an entry to keep watching it without it blocking ready checks. Remove entries with the `x` button. Weapon-enchant entries get a **Main-hand / Off-hand / Both weapons** button — click it to cycle between hands, e.g. set it to "Both weapons" for something like Windfury Weapon imbued on two weapons. Paste a numeric ID to track anything not in the built-in list: for a regular buff, that's a spell ID from Wowhead's URL; for a weapon enchant, tick "Weapon enchant" first — the box then expects a *weapon-enchant* ID (from the "Enchant Item - Temporary: ... (id)" line on the ability's Wowhead Effect tab, not the ability's own spell ID) and you'll also need to type in a display name yourself, since the client can't resolve one from that id. A "Load Class Defaults" button seeds a starting list for your class.
 - **Options tab** — toggle the alarm sound, and toggle whether ready checks are auto-declined when a required buff is missing.
 
 ### The on-screen checklist
@@ -86,7 +87,8 @@ Drag the header to reposition it; click the header to open the config window; ho
 ## How detection works
 
 - **Auras** (flasks, elixirs, food, class/group buffs) are detected by scanning the player's buff list and matching by spell ID *and* by name. Name matching exists because ranks, "Greater" versions, and duplicate spell IDs across factions/versions of the Anniversary realm all display the same buff name — e.g. every rank of "Greater Blessing of Kings" contains the text "Blessing of Kings." Matching on name is far more durable than trying to enumerate every id variant by hand.
-- **Weapon enchants** (oils, stones, shaman imbues) are *not* regular auras — WoW's API only exposes them through `GetWeaponEnchantInfo()`. On builds that expose the specific enchant ID, a mismatch (wrong oil on your weapon) is reported the same as "missing." On builds that only expose "something is applied, but not what," it's reported as **unknown** rather than a false positive or negative — the addon would rather stay quiet than nag you about a buff you already have.
+- **Weapon enchants** (oils, stones, shaman imbues) are *not* regular auras — WoW's API only exposes them through `GetWeaponEnchantInfo()`. On builds that expose the specific enchant ID, a mismatch (wrong oil on your weapon) is reported the same as "missing." On builds that only expose "something is applied, but not what," it's reported as **unknown** rather than a false positive or negative — the addon would rather stay quiet than nag you about a buff you already have. Note that the id `GetWeaponEnchantInfo()` returns is a *weapon-enchant* id, a completely different id space from spell ids — see [Maintaining the spell database](#maintaining-the-spell-database) for why that matters.
+- Weapon enchants can be tracked as **main-hand**, **off-hand**, or **both**. "Both" requires the same enchant on both weapons to count as active — for a dual-wielder running two *different* imbues (e.g. Windfury main-hand, Rockbiter off-hand), track each as its own main-hand/off-hand entry instead of one "both" entry.
 - At `PLAYER_LOGIN`, every built-in database entry is resolved against your own client's spell data (no network calls — the client already ships name/icon for every real spell ID). Entries that don't resolve are flagged in the UI so you can see at a glance if something in the built-in list is stale.
 
 
@@ -156,10 +158,10 @@ A **group** describes one trackable thing:
 | Field | Meaning |
 |---|---|
 | `name` | Display name; used as the unique key for tracked entries. Must be unique across the whole database. |
-| `ids` | Every known spell ID for this buff/enchant across ranks, factions, and Anniversary-realm duplicates. Matching *any* id counts as active — an extra id that turns out to be a harmless duplicate costs nothing. |
-| `match` | *(optional)* Explicit substring patterns to match against the aura's displayed name, for cases where multiple distinct spells (e.g. "Power Word: Fortitude" and "Prayer of Fortitude") should count as the same tracked thing. Falls back to `{ name }` if omitted. |
+| `ids` | For `type == "aura"`: every known **spell** ID for this buff across ranks, factions, and Anniversary-realm duplicates. For `type == "weaponEnchant"`: every known **weapon-enchant** ID (what `GetWeaponEnchantInfo()` returns) — a totally different id space from spell ids, see [Maintaining the spell database](#maintaining-the-spell-database). Either way, matching *any* id counts as active — an extra id that turns out to be a harmless duplicate costs nothing. |
+| `match` | *(optional, `aura` entries only)* Explicit substring patterns to match against the aura's displayed name, for cases where multiple distinct spells (e.g. "Power Word: Fortitude" and "Prayer of Fortitude") should count as the same tracked thing. Falls back to `{ name }` if omitted. There is no name-matching fallback for `weaponEnchant` entries — an id match is the only thing that can confirm one (see below). |
 | `type` | `"aura"` (default) or `"weaponEnchant"`. |
-| `slot` | For `weaponEnchant` only: `"main"` or `"off"`. |
+| `slot` | For `weaponEnchant` only: `"main"`, `"off"`, or `"both"` (default `"main"`). `"both"` requires the same enchant on both weapons to count as active. |
 
 A **tracked entry** (what actually lives in `AreYouBuffedCharDB.tracked`) is a copy of the fields above plus `required` (boolean) and, for manually-added spells, `custom = true`.
 
@@ -167,14 +169,14 @@ A **tracked entry** (what actually lives in `AreYouBuffedCharDB.tracked`) is a c
 
 The core loop, `AYB:CheckEntry(entry)`:
 
-- For `type == "weaponEnchant"`: calls `GetWeaponEnchantInfo()`. If the client exposes the actual enchant ID, it's checked against `entry.ids` (exact match) and, failing that, against `entry`'s resolved match patterns by name (catches variants never hardcoded). If the client only reports *that* something is applied but not *what*, the result is `"unknown"` — deliberately not treated as missing.
-- Otherwise: scans the player's own buffs (`C_UnitAuras.GetBuffDataByIndex` on modern clients, `UnitBuff` fallback) up to 60 slots, matching each aura by id (if `entry.ids` given) or by name substring via `AYB:ResolveMatchPatterns(entry)`.
+- For `type == "weaponEnchant"`: `AYB:CheckWeaponSlot(entry, slot)` calls `GetWeaponEnchantInfo()` for that slot. If the client exposes the actual enchant ID, it's checked against `entry.ids` (exact match) — a match is `"active"`, anything else is a definite `"missing"` (the wrong enchant is on the weapon). There's deliberately no name-based fallback here the way auras have one: `GetWeaponEnchantInfo()`'s enchant ID isn't a spell ID, so there's no name to resolve it to. If the client only reports *that* something is applied but not *what*, the result is `"unknown"` — not treated as missing. `entry.slot == "both"` checks main- and off-hand independently and combines them: both `"active"` → `"active"`; either `"missing"` → `"missing"`; otherwise `"unknown"`.
+- Otherwise (`type == "aura"`): scans the player's own buffs (`C_UnitAuras.GetBuffDataByIndex` on modern clients, `UnitBuff` fallback) up to 60 slots, matching each aura by id (if `entry.ids` given) or by name substring via `AYB:ResolveMatchPatterns(entry)`.
 
 Results are one of `"active"`, `"missing"`, or `"unknown"`. `AYB:GetMissingRequired()` filters `"missing"` entries where `entry.required` is true — `"unknown"` never counts as missing, by design (the addon would rather stay silent than falsely nag about a buff that's actually on).
 
 Refreshes are debounced: `UNIT_AURA` events call `AYB:RequestRefresh()`, which coalesces bursts into a single `C_Timer.After(0.2, ...)` call rather than re-scanning on every individual aura event. A `C_Timer.NewTicker(2, ...)` also re-checks every 2 seconds as a safety net (e.g. for weapon enchants, which don't fire `UNIT_AURA`).
 
-`AYB:ValidateDatabase()` runs once at `PLAYER_LOGIN`: it resolves every id in every built-in group against the client's own spell data via `C_Spell.GetSpellInfo`/`GetSpellInfo`, and stores per-group pass/fail in `AYB.validation`, which `UI.lua` reads to show the `(unverified)` warning.
+`AYB:ValidateDatabase()` runs once at `PLAYER_LOGIN`: for `aura` groups, it resolves every id against the client's own spell data via `C_Spell.GetSpellInfo`/`GetSpellInfo` and stores per-group pass/fail in `AYB.validation`, which `UI.lua` reads to show the `(unverified)` warning. `weaponEnchant` groups are skipped by that resolution (their ids aren't spell ids, so the spell API can't check them either way) and are instead flagged unverified simply when `ids` is empty.
 
 ### Display / checklist popup (`Display.lua`)
 
@@ -198,12 +200,20 @@ Both are initialized/backfilled via `CopyDefaults()` on `ADDON_LOADED`, which fi
 
 ### Maintaining the spell database
 
-`data/tbc_spells.json` is a harvested reference dump (~28k spells) used *offline*, when editing `Database.lua`, to verify a spell name/id pair actually exists before adding it — it is **not** loaded by the addon at runtime. When adding or editing entries in `Database.lua`:
+`data/tbc_spells.json` is a harvested reference dump (~28k spells) used *offline*, when editing `Database.lua`, to verify a spell name/id pair actually exists before adding it — it is **not** loaded by the addon at runtime. This only applies to `type == "aura"` groups; see below for `weaponEnchant`.
+
+**For `aura` groups (flasks, elixirs, food, class/group buffs, world buffs):**
 
 1. Look up the exact spell name in `data/tbc_spells.json` (or Wowhead) rather than typing an ID from memory.
 2. Include every rank/variant/duplicate id for that display name in the group's `ids` array — matching any one is enough to count as active, so extra ids are harmless.
 3. If no exact name match can be found at all, don't guess — leave it out of the built-in database (a couple of categories were dropped in early drafts for exactly this reason) and let users add it manually via the custom spell ID field instead.
 4. `AYB:ValidateDatabase()` will automatically flag any group whose ids don't resolve on a real client, surfacing mistakes in the config UI rather than failing silently.
+
+**For `weaponEnchant` groups (oils, stones, shaman imbues):** `data/tbc_spells.json` and the client's spell API are both useless here — `ids` for this type are weapon-enchant ids, not spell ids, and that id space has no lookup available in-game at all. The only way to get a correct id is to find the ability's page on Wowhead and read it off the Effect tab's `Enchant Item - Temporary: <name> <rank> (<id>)` line — the number in parentheses is the real id, and it's *not* the same as the number in the page's own URL (that's the spell id of the ability you cast, which is a completely different number). A couple of things learned the hard way while building this category, worth knowing before touching it again:
+
+- The crafting recipe for a stone/oil (the "Create Item" spell you use at a forge/table) and the spell that actually applies it to your weapon are two different spell ids sharing the same display name — only the latter has an `Enchant Item - Temporary` effect. Elemental/Dense/Adamantite Sharpening Stone and Adamantite Weightstone currently ship with `ids = {}` because only the recipe id could be found; they'll show `(unverified)` until the correct apply-id is found and added here.
+- The same named rank can appear under several different ids across Classic's various re-releases (Rockbiter Weapon is the extreme example — the same "Rockbiter 1" shows up under at least four different ids). When that happens, include all of them rather than picking one and hoping — same "harmless duplicate" reasoning as the aura case, just at the enchant-id level instead of the spell-id level.
+- Because this id space isn't spell ids, `AYB:ValidateDatabase()` can't verify these against the client at all (see [Detection engine](#detection-engine-corelua)) — an empty `ids` array is the only signal it can give, so leave it empty rather than filling it with a guess if you can't find the real id.
 
 ### Extending the addon
 

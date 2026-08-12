@@ -20,6 +20,38 @@ local WINDOW_HEIGHT = 520
 local ROW_HEIGHT = 22
 
 --------------------------------------------------------------------------
+-- Weapon slot picker (main-hand / off-hand / both) - a small button that
+-- cycles through the three on click, used both for tracked weaponEnchant
+-- rows and the custom-add panel.
+--------------------------------------------------------------------------
+
+local SLOT_LABELS = { main = "Main-hand", off = "Off-hand", both = "Both weapons" }
+local SLOT_ORDER = { "main", "off", "both" }
+
+local function CreateSlotButton(parent, onChange)
+	local button = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
+	button:SetSize(96, 20)
+	button.slot = "main"
+	button:GetFontString():SetFontObject("GameFontHighlightSmall")
+	button:SetText(SLOT_LABELS[button.slot])
+	button:SetScript("OnClick", function(self)
+		local currentIndex = 1
+		for index, slot in ipairs(SLOT_ORDER) do
+			if slot == self.slot then
+				currentIndex = index
+				break
+			end
+		end
+		self.slot = SLOT_ORDER[(currentIndex % #SLOT_ORDER) + 1]
+		self:SetText(SLOT_LABELS[self.slot])
+		if onChange then
+			onChange(self.slot)
+		end
+	end)
+	return button
+end
+
+--------------------------------------------------------------------------
 -- Shared row widgets
 --------------------------------------------------------------------------
 
@@ -61,10 +93,18 @@ local function CreateBrowseRow(parent)
 		end
 		GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
 		GameTooltip:SetText(group.name)
-		GameTooltip:AddLine("Spell ID(s): " .. table.concat(group.ids, ", "), 0.8, 0.8, 0.8)
+		if group.type == "weaponEnchant" then
+			GameTooltip:AddLine("Weapon enchant ID(s): " .. table.concat(group.ids, ", "), 0.8, 0.8, 0.8)
+		else
+			GameTooltip:AddLine("Spell ID(s): " .. table.concat(group.ids, ", "), 0.8, 0.8, 0.8)
+		end
 		local validation = AYB.validation and AYB.validation[group.name]
 		if validation then
-			if validation.ok then
+			if group.type == "weaponEnchant" then
+				if not validation.ok then
+					GameTooltip:AddLine("No known weapon-enchant id for this entry yet - it will never match. Please verify on Wowhead and add the correct id to Database.lua.", 1, 0.4, 0.4, true)
+				end
+			elseif validation.ok then
 				GameTooltip:AddLine("Recognized as: " .. table.concat(validation.resolvedNames, " / "), 0.6, 1, 0.6, true)
 			else
 				GameTooltip:AddLine("None of these IDs were recognized by your client - this entry may be outdated. Please verify on Wowhead and add the correct ID manually if needed.", 1, 0.4, 0.4, true)
@@ -95,9 +135,20 @@ local function CreateTrackedRow(parent)
 
 	local label = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
 	label:SetPoint("LEFT", check, "RIGHT", 4, 0)
-	label:SetWidth(280)
+	label:SetWidth(180)
 	label:SetJustifyH("LEFT")
 	row.label = label
+
+	-- Only shown/enabled for type == "weaponEnchant" entries - see
+	-- PopulateMyBuffsList. Lets you pick main-hand/off-hand/both after the
+	-- fact, for both built-in and custom-added weapon enchants.
+	local slotButton = CreateSlotButton(row, function(slot)
+		if row.entryName then
+			AYB:SetSlot(row.entryName, slot)
+		end
+	end)
+	slotButton:SetPoint("LEFT", label, "RIGHT", 4, 0)
+	row.slotButton = slotButton
 
 	local removeButton = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
 	removeButton:SetSize(20, 20)
@@ -251,12 +302,16 @@ function UI:PopulateMyBuffsList()
 		row.check:SetChecked(entry.required)
 		row.check.entryName = entry.name
 		row.removeButton.entryName = entry.name
+		row.entryName = entry.name
+		row.label:SetText(entry.name)
 
-		local tag = ""
 		if entry.type == "weaponEnchant" then
-			tag = entry.slot == "off" and "  |cff999999(off-hand enchant)|r" or "  |cff999999(weapon enchant)|r"
+			row.slotButton.slot = entry.slot or "main"
+			row.slotButton:SetText(SLOT_LABELS[row.slotButton.slot])
+			row.slotButton:Show()
+		else
+			row.slotButton:Hide()
 		end
-		row.label:SetText(entry.name .. tag)
 
 		row:Show()
 	end
@@ -291,40 +346,62 @@ local function CreateMyBuffsPanel(parent)
 	-- custom add-by-id row
 	local addLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
 	addLabel:SetPoint("BOTTOMLEFT", 8, 46)
-	addLabel:SetText("Add custom spell ID (paste from Wowhead):")
+	addLabel:SetText("Add custom: spell ID for a buff, or weapon-enchant ID for a weapon enchant:")
 
 	local addBox = CreateFrame("EditBox", nil, panel, "InputBoxTemplate")
-	addBox:SetSize(80, 20)
+	addBox:SetSize(70, 20)
 	addBox:SetAutoFocus(false)
 	addBox:SetNumeric(true)
 	addBox:SetPoint("TOPLEFT", addLabel, "BOTTOMLEFT", 4, -4)
 
 	local weaponCheck = CreateFrame("CheckButton", nil, panel, "UICheckButtonTemplate")
 	weaponCheck:SetSize(20, 20)
-	weaponCheck:SetPoint("LEFT", addBox, "RIGHT", 55, 0)
+	weaponCheck:SetPoint("LEFT", addBox, "RIGHT", 8, 0)
 	local weaponLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
 	weaponLabel:SetPoint("LEFT", weaponCheck, "RIGHT", 2, 0)
 	weaponLabel:SetText("Weapon enchant")
 
-	local offhandCheck = CreateFrame("CheckButton", nil, panel, "UICheckButtonTemplate")
-	offhandCheck:SetSize(20, 20)
-	offhandCheck:SetPoint("LEFT", weaponLabel, "RIGHT", 10, 0)
-	local offhandLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-	offhandLabel:SetPoint("LEFT", offhandCheck, "RIGHT", 2, 0)
-	offhandLabel:SetText("Off-hand")
+	local slotButton = CreateSlotButton(panel)
+	slotButton:SetPoint("LEFT", weaponLabel, "RIGHT", 10, 0)
+
+	-- Only relevant (and required) when "Weapon enchant" is checked: unlike a
+	-- spell id, a weapon-enchant id can't be resolved to a name by the
+	-- client, so the name has to be typed in by hand.
+	local nameLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+	nameLabel:SetText("Name:")
+	nameLabel:Hide()
+
+	local nameBox = CreateFrame("EditBox", nil, panel, "InputBoxTemplate")
+	nameBox:SetSize(140, 20)
+	nameBox:SetAutoFocus(false)
+	nameBox:Hide()
+
+	weaponCheck:SetScript("OnClick", function(self)
+		if self:GetChecked() then
+			nameLabel:Show()
+			nameBox:Show()
+		else
+			nameLabel:Hide()
+			nameBox:Hide()
+		end
+	end)
 
 	local addButton = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
 	addButton:SetSize(70, 22)
 	addButton:SetText("Add")
 	addButton:SetPoint("LEFT", addBox, "LEFT", 0, -26)
 	addButton:SetScript("OnClick", function()
-		local ok = AYB:AddCustom(addBox:GetText(), true, weaponCheck:GetChecked(), offhandCheck:GetChecked() and "off" or "main")
+		local ok = AYB:AddCustom(addBox:GetText(), true, weaponCheck:GetChecked(), slotButton.slot, nameBox:GetText())
 		if ok then
 			addBox:SetText("")
+			nameBox:SetText("")
 			UI:PopulateMyBuffsList()
 			UI:PopulateBrowseList()
 		end
 	end)
+
+	nameLabel:SetPoint("LEFT", addButton, "RIGHT", 10, 0)
+	nameBox:SetPoint("LEFT", nameLabel, "RIGHT", 4, 0)
 
 	local defaultsButton = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
 	defaultsButton:SetSize(150, 22)

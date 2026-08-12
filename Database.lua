@@ -21,17 +21,46 @@
 	name match could be found in the harvested data at all - rather than
 	ship guessed ids for those, use "+ Add custom spell ID" in the UI if you
 	need them.
+
+	EXCEPTION - the "Weapon Enchants" category below does NOT use spell ids.
+	Temporary weapon enchants (oils, stones, shaman imbues) aren't detected
+	via the player's spell/aura data at all; the client only exposes them
+	through GetWeaponEnchantInfo(), which reports a "weapon enchant id" - a
+	completely different id space from spell ids, assigned by Blizzard's
+	SpellItemEnchantment data, with no relation to the id of the ability you
+	cast. Those ids were pulled from each ability's Wowhead page (the
+	"Enchant Item - Temporary: <name> <rank> (<id>)" line on its Effect tab),
+	not from data/tbc_spells.json, and Core.lua's spell-based validation
+	skips this category entirely for that reason - it has no way to check a
+	weapon-enchant id against anything. Rockbiter Weapon in particular has an
+	unusually messy history (the same rank shows up under several different
+	ids across Classic's various re-releases), so its list is a best-effort
+	superset rather than a clean one-id-per-rank mapping. Elemental/Dense/
+	Adamantite Sharpening Stone and Adamantite Weightstone are left with an
+	empty `ids` (flagged "(unverified)" in the UI) because only their
+	crafting-recipe spell id could be found, not the id actually applied when
+	you use the item on your weapon - "+ Add custom spell ID" won't help
+	here either, since a weapon-enchant id can't be typed in via that path
+	(it only accepts spell ids); these four need their correct
+	GetWeaponEnchantInfo id found and added directly to this file.
 ]]
 
 AreYouBuffed = AreYouBuffed or {}
 local AYB = AreYouBuffed
 
 -- entry.type:
---   "aura"          - detected via the player's buff list (UnitBuff / C_UnitAuras)
+--   "aura"          - detected via the player's buff list (UnitBuff / C_UnitAuras).
+--                     entry.ids are spell ids.
 --   "weaponEnchant" - detected via GetWeaponEnchantInfo (temporary weapon buffs:
 --                     oils, stones, shaman weapon imbues - these never show up
---                     as normal auras)
--- entry.slot (weaponEnchant only): "main" or "off" (default "main")
+--                     as normal auras). entry.ids are weapon-enchant ids, NOT
+--                     spell ids - see the file header above.
+-- entry.slot (weaponEnchant only): "main", "off", or "both" (default "main").
+--                     "both" requires the SAME enchant on both weapons to
+--                     count as active (e.g. Windfury Weapon on both a main-
+--                     and off-hand weapon) - for a dual-wielder running two
+--                     different imbues, track each as its own "main"/"off"
+--                     entry instead.
 
 AYB.Database = {
 	categories = {
@@ -104,26 +133,34 @@ AYB.Database = {
 			key = "weapon_enchants",
 			label = "Weapon Enchants",
 			groups = {
-				{ name = "Elemental Sharpening Stone", ids = { 22757 }, type = "weaponEnchant" },
-				{ name = "Dense Sharpening Stone", ids = { 16641 }, type = "weaponEnchant" },
-				{ name = "Adamantite Sharpening Stone", ids = { 29656 }, type = "weaponEnchant" },
-				{ name = "Adamantite Weightstone", ids = { 34608 }, type = "weaponEnchant" },
-				{ name = "Brilliant Wizard Oil", ids = { 25122, 25129 }, type = "weaponEnchant" },
-				{ name = "Brilliant Mana Oil", ids = { 25123, 25130 }, type = "weaponEnchant" },
-				{ name = "Blessed Wizard Oil", ids = { 28898 }, type = "weaponEnchant" },
-				{ name = "Shadow Oil", ids = { 3449, 3594 }, type = "weaponEnchant" },
-				{ name = "Windfury Weapon", ids = { 8232, 8235, 10486, 16362, 25505, 32911, 35886 }, type = "weaponEnchant" },
-				{ name = "Flametongue Weapon", ids = { 8024, 8027, 8030, 16339, 16341, 16342, 25489 }, type = "weaponEnchant" },
-				{ name = "Frostbrand Weapon", ids = { 8033, 8038, 10456, 16355, 16356, 25500 }, type = "weaponEnchant" },
+				-- ids = {} means "correct weapon-enchant id not found yet" - see the
+				-- file header. These will always show "(unverified)" and never
+				-- match until someone finds and adds the right id.
+				{ name = "Elemental Sharpening Stone", ids = {}, type = "weaponEnchant" },
+				{ name = "Dense Sharpening Stone", ids = {}, type = "weaponEnchant" },
+				{ name = "Adamantite Sharpening Stone", ids = {}, type = "weaponEnchant" },
+				{ name = "Adamantite Weightstone", ids = {}, type = "weaponEnchant" },
+				{ name = "Brilliant Wizard Oil", ids = { 2628 }, type = "weaponEnchant" },
+				{ name = "Brilliant Mana Oil", ids = { 2629 }, type = "weaponEnchant" },
+				{ name = "Blessed Wizard Oil", ids = { 2685 }, type = "weaponEnchant" },
+				{ name = "Shadow Oil", ids = { 25 }, type = "weaponEnchant" },
+				-- Windfury Weapon ranks 1-5 (TBC's max obtainable rank)
+				{ name = "Windfury Weapon", ids = { 283, 284, 525, 1669, 2636 }, type = "weaponEnchant" },
+				-- Flametongue Weapon ranks 1-7
+				{ name = "Flametongue Weapon", ids = { 5, 4, 3, 523, 1665, 1666, 2634 }, type = "weaponEnchant" },
+				-- Frostbrand Weapon ranks 1-6
+				{ name = "Frostbrand Weapon", ids = { 2, 12, 524, 1667, 1668, 2635 }, type = "weaponEnchant" },
+				-- Rockbiter Weapon ranks 1-9 (rank 9 is Wrath-only and never
+				-- reachable on a TBC Anniversary character, but keeping its id
+				-- is harmless - see the file header re: Rockbiter's messy
+				-- history for why this is a superset rather than one clean id
+				-- per rank).
 				{
 					name = "Rockbiter Weapon",
 					type = "weaponEnchant",
 					ids = {
-						8017, 8018, 8019, 10399, 16314, 16315, 16316, 25479, 25485, 33640,
-						36494, 36495, 36496, 36497, 36498, 36499, 36502, 36744, 36750, 36751,
-						36752, 36753, 36754, 36755, 36756, 36757, 36758, 36759, 36760, 36761,
-						36762, 36763, 36764, 36765, 36766, 36767, 36768, 36769, 36770, 36771,
-						36772, 36773, 36774, 36775, 36776, 36777,
+						1, 6, 29, 503, 1664, 2633,
+						3018, 3019, 3020, 3021, 3022, 3023, 3024, 3025, 3031, 3033, 3036, 3040, 3042, 3044,
 					},
 				},
 			},
