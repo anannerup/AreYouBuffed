@@ -1,0 +1,18 @@
+## Interface: 20506
+## Title: AreYouBuffed
+## Notes: Tracks the consumables, weapon enchants, and group buffs you configure, shows a live on-screen checklist, and can auto-decline ready checks when something required is missing.
+## Author: ank
+## Version: 0.1.0
+## SavedVariables: AreYouBuffedDB
+## SavedVariablesPerCharacter: AreYouBuffedCharDB
+## X-Category: Buffs
+## X-Website: https://www.wowhead.com/
+
+# If the AddOns list shows this as "out of date", tick "Load out of date
+# AddOns" - the interface number above just needs bumping after a client
+# patch, it doesn't mean anything here actually broke.
+
+Database.lua
+Core.lua
+Display.lua
+UI.lua

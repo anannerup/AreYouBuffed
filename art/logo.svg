@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2a1f14"/>
+      <stop offset="1" stop-color="#0a0806"/>
+    </linearGradient>
+  </defs>
+  <rect x="0" y="0" width="64" height="64" fill="url(#bg)"/>
+  <rect x="2" y="2" width="60" height="60" rx="4" fill="none" stroke="#caa04a" stroke-width="2"/>
+  <rect x="4.5" y="4.5" width="55" height="55" rx="3" fill="none" stroke="#7a5a22" stroke-width="1"/>
+  <text x="32" y="28" font-family="Luminari, Papyrus, serif" font-size="13.5" font-weight="bold" fill="#f4cf6a" text-anchor="middle" stroke="#4a2f00" stroke-width="0.6" paint-order="stroke">AreYou</text>
+  <text x="32" y="47" font-family="Luminari, Papyrus, serif" font-size="13.5" font-weight="bold" fill="#f4cf6a" text-anchor="middle" stroke="#4a2f00" stroke-width="0.6" paint-order="stroke">Buffed</text>
+</svg>
