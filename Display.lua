@@ -3,10 +3,24 @@
 
 	A checklist popup, not an always-on-screen tracker: it's hidden at login
 	and stays hidden until you run /buffed (or /ayb check), at which point it
-	shows one icon per tracked buff - green border only on a confirmed match,
-	red for anything else (missing, or a weapon enchant that's on but can't be
-	identified) - and hides itself again 10 seconds later. Drag the header to
-	move it, click it to open the config window.
+	shows one icon per tracked buff, colored by status, and hides itself again
+	10 seconds later. Drag the header to move it, click it to open the config
+	window.
+
+	Border colors (see AYB:CheckEntry in Core.lua for how each status is
+	decided):
+	  - GREEN  ("active")  - confirmed present. For a normal buff this means
+	    the aura was found on the player. For a weapon enchant it means the
+	    client told us exactly which enchant is applied, and it's the right
+	    one.
+	  - RED    ("missing") - confirmed absent. Nothing matching is there.
+	  - YELLOW ("unknown") - weapon-enchant-only, and NOT the same as missing.
+	    Regular buffs can never land here. Some client builds' weapon-enchant
+	    API (GetWeaponEnchantInfo) only reports "something is applied to this
+	    weapon", not which enchant it is - so the addon genuinely cannot tell
+	    whether it's the right one. Yellow means "can't verify, probably
+	    fine" - it deliberately does NOT block ready checks the way a
+	    confirmed "missing" does (see AYB:GetMissingRequired in Core.lua).
 ]]
 
 AreYouBuffed = AreYouBuffed or {}
@@ -166,11 +180,17 @@ function Display:RenderIcons(results)
 		button.entryStatus = result.status
 
 		if result.status == "active" then
-			button.border:SetColorTexture(0.2, 0.85, 0.2, 1)
+			button.border:SetColorTexture(0.2, 0.85, 0.2, 1) -- green: confirmed present
+			button.icon:SetDesaturated(false)
+			button:SetAlpha(1)
+		elseif result.status == "unknown" then
+			-- yellow: weapon enchant IS applied, client just can't say which one.
+			-- Not treated as missing - see the module comment above.
+			button.border:SetColorTexture(0.9, 0.8, 0.2, 1)
 			button.icon:SetDesaturated(false)
 			button:SetAlpha(1)
 		else
-			button.border:SetColorTexture(0.85, 0.15, 0.15, 1)
+			button.border:SetColorTexture(0.85, 0.15, 0.15, 1) -- red: confirmed missing
 			button.icon:SetDesaturated(true)
 			button:SetAlpha(0.9)
 		end

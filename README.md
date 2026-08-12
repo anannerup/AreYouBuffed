@@ -79,8 +79,9 @@ If the AddOns list flags it as "out of date," tick **Load out of date AddOns** �
 
 Hidden at login. Running `/buffed` (or `/ayb check`) pops up a small icon strip — one icon per tracked buff, colored by status — and hides itself again after 10 seconds:
 
-- 🟩 **Green border** — active, confirmed.
-- 🟥 **Red border, desaturated icon** — missing, or a weapon enchant is on but this client build can't identify exactly which one. Hover the icon for the exact reason.
+- 🟩 **Green border** — confirmed present. For a normal buff, the aura was found on you. For a weapon enchant, the client told us exactly which enchant is on and it's the right one.
+- 🟥 **Red border, desaturated icon** — confirmed missing. Nothing matching is there.
+- 🟨 **Yellow border** — *weapon enchants only*, and not the same as missing. Some client builds only report "something is applied to this weapon," not which enchant — so the addon genuinely can't verify it's the right one. Treated as "probably fine": it does **not** block ready checks the way a confirmed red does. Regular buffs (flasks, elixirs, class buffs, etc.) can never show yellow — only oils/stones/weapon imbues can, because of how Blizzard's weapon-enchant API works (see [How detection works](#how-detection-works)).
 
 Drag the header to reposition it; click the header to open the config window; hover an icon for its name and status.
 
