@@ -79,9 +79,8 @@ If the AddOns list flags it as "out of date," tick **Load out of date AddOns** �
 
 Hidden at login. Running `/buffed` (or `/ayb check`) pops up a small icon strip — one icon per tracked buff, colored by status — and hides itself again after 10 seconds:
 
-- 🟩 **Green border** — active.
-- 🟥 **Red border, desaturated icon** — missing.
-- 🟨 **Yellow border** — a weapon enchant is applied, but this client build can't identify exactly which one (treated as "probably fine," not as missing).
+- 🟩 **Green border** — active, confirmed.
+- 🟥 **Red border, desaturated icon** — missing, or a weapon enchant is on but this client build can't identify exactly which one. Hover the icon for the exact reason.
 
 Drag the header to reposition it; click the header to open the config window; hover an icon for its name and status.
 

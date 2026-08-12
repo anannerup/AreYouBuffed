@@ -3,10 +3,10 @@
 
 	A checklist popup, not an always-on-screen tracker: it's hidden at login
 	and stays hidden until you run /buffed (or /ayb check), at which point it
-	shows one icon per tracked buff - green border if active, red if missing,
-	yellow if a weapon enchant is on but couldn't be identified - and hides
-	itself again 10 seconds later. Drag the header to move it, click it to
-	open the config window.
+	shows one icon per tracked buff - green border only on a confirmed match,
+	red for anything else (missing, or a weapon enchant that's on but can't be
+	identified) - and hides itself again 10 seconds later. Drag the header to
+	move it, click it to open the config window.
 ]]
 
 AreYouBuffed = AreYouBuffed or {}
@@ -167,10 +167,6 @@ function Display:RenderIcons(results)
 
 		if result.status == "active" then
 			button.border:SetColorTexture(0.2, 0.85, 0.2, 1)
-			button.icon:SetDesaturated(false)
-			button:SetAlpha(1)
-		elseif result.status == "unknown" then
-			button.border:SetColorTexture(0.9, 0.8, 0.2, 1)
 			button.icon:SetDesaturated(false)
 			button:SetAlpha(1)
 		else
