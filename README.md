@@ -8,8 +8,6 @@ A lightweight raid-readiness checker for **World of Warcraft: Burning Crusade Cl
 
 Configure exactly which flasks, elixirs, weapon enchants, and group buffs matter for each of your characters, then run `/buffed` to get an instant on-screen checklist — green if you have it, red if you don't. Optionally, AreYouBuffed can auto-decline ready checks on your behalf when something required is missing, so you never accidentally ready up half-buffed.
 
-There's no per-item consumable tracking, no DPS meter, no bloat — just "am I buffed, yes or no."
-
 ---
 
 ## Table of contents
@@ -91,21 +89,6 @@ Drag the header to reposition it; click the header to open the config window; ho
 - **Weapon enchants** (oils, stones, shaman imbues) are *not* regular auras — WoW's API only exposes them through `GetWeaponEnchantInfo()`. On builds that expose the specific enchant ID, a mismatch (wrong oil on your weapon) is reported the same as "missing." On builds that only expose "something is applied, but not what," it's reported as **unknown** rather than a false positive or negative — the addon would rather stay quiet than nag you about a buff you already have.
 - At `PLAYER_LOGIN`, every built-in database entry is resolved against your own client's spell data (no network calls — the client already ships name/icon for every real spell ID). Entries that don't resolve are flagged in the UI so you can see at a glance if something in the built-in list is stale.
 
-## FAQ
-
-**Does this track other raid members' buffs?**
-No — player-only, by design. It's a personal readiness check, not a raid buff monitor.
-
-**Will it interrupt me by force-declining ready checks?**
-Only if you leave "Automatically click 'No'..." enabled in Options (on by default) *and* you're missing something marked **required**. Optional entries never block a ready check.
-
-**A buff I picked from the Browse list shows `(unverified)`. What does that mean?**
-None of its spell IDs matched anything in your client's own spell database. It may be a stale ID from a patch change. Please verify on Wowhead and either report it, or track the correct one manually via "Add custom spell ID" in the My Buffs tab.
-
-**Can I use this on multiple characters?**
-Yes — tracked buffs are stored per-character (`AreYouBuffedCharDB`), while sound/ready-check/position options are shared account-wide (`AreYouBuffedDB`).
-
----
 
 ## For developers
 
